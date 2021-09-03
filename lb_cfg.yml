@@ -1,0 +1,48 @@
+- hosts: mylb
+  tasks:
+  - name: install haproxy
+    package:
+     name: haproxy
+     state: present
+  - name: edit config file
+    lineinfile:
+     path: /etc/haproxy/haproxy.cfg
+     insertafter: "backend app
+                      balance      roundrobin"
+     line: "{% for i in groups['web']%}
+     \t  server app{{loop.index}} {{i}}:80 check \n
+            {% endfor %}"
+  - name: to start the service
+    service:
+     name: haproxy
+     state: started
+- hosts: web
+  vars:
+   pkgs:
+   - php
+   - httpd
+   rule:
+   - http
+   - https
+  tasks:
+  - name: to install the packages
+    package:
+     name: "{{item}}"
+     state: present
+    loop: "{{pkgs}}"
+  - name: to start the service
+    service:
+     name: httpd
+     state: started
+  - name: to disable the firewalld
+    ignore_errors: yes
+    firewalld:
+     permanent: yes
+     state: disabled
+     immediate: no
+     service: "{{item}}"
+    loop: "{{rule}}"
+  - name: to cpy the file
+    copy:
+     src: /home/admin/ansible/index.php
+     dest: /var/www/html/index.php
